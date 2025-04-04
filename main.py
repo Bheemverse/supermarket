@@ -19,11 +19,19 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 # Load dataset using pathlib
 data_file = Path("supermarket_sales.xlsx")  # Ensure the file is in the same directory as main.py
 if not data_file.exists():
-    raise FileNotFoundError(f"Dataset file '{data_file}' not found. Please place 'supermarket_sales.xlsx' in the 'new_super' directory.")
-df = pd.read_excel(data_file)
+    logging.error(f"Dataset file '{data_file}' not found. Please place 'supermarket_sales.xlsx' in the 'new_super' directory.")
+    raise FileNotFoundError(f"Dataset file '{data_file}' not found.")
+try:
+    df = pd.read_excel(data_file)
+except Exception as e:
+    logging.error(f"Failed to load dataset: {e}")
+    raise
 
 # Convert transactions into a basket format
 basket = df.groupby(['Invoice ID', 'Product'])['Quantity'].sum().unstack().fillna(0)
@@ -106,9 +114,6 @@ def get_association_rules() -> List[Dict[str, Any]]:
     ]
     return formatted_rules
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     logging.error(f"Unhandled exception: {exc}")
@@ -119,5 +124,28 @@ async def global_exception_handler(request, exc):
 
 if __name__ == "__main__":
     import uvicorn
-    logging.info("Starting the application...")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    import sys
+    import socket
+
+    def find_available_port(start_port: int) -> int:
+        """
+        Find the next available port starting from the given port.
+        """
+        port = start_port
+        while True:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                if sock.connect_ex(("127.0.0.1", port)) != 0:  # Port is available
+                    return port
+                port += 1  # Try the next port
+
+    # Dynamic port handling
+    default_port = 8000
+    if len(sys.argv) > 1:
+        try:
+            default_port = int(sys.argv[1])
+        except ValueError:
+            logging.warning("Invalid port number provided. Using default port 8000.")
+
+    available_port = find_available_port(default_port)
+    logging.info(f"Starting the application on port {available_port}...")
+    uvicorn.run(app, host="127.0.0.1", port=available_port)
