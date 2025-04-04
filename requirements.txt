@@ -1,6 +1,5 @@
 fastapi
 uvicorn
 pandas
-openpyxl
 mlxtend
-pydantic
+openpyxl
